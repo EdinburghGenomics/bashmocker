@@ -80,9 +80,10 @@ class BashMocker:
            as the interpreter, not #!/bin/sh or #!/bin/dash or anything
            called indirectly within the script, like 'env /bin/true ...'.
         """
-        # This hack only works on BASH
+        # This hack only works on BASH by setting BASH_ENV. DASH does not read any preable for
+        # non-interactive scripts so there seems to be no easy way to poke one in.
         if not self._shell.endswith('/bash'):
-            raise RuntimeError("Only BASH allows functions with slashes in the name")
+            raise RuntimeError("Only BASH allows setting a preamble for scripts")
 
         mockfunc = r'''
             {funcname}(){{

@@ -117,7 +117,8 @@ class T(unittest.TestCase):
         """It's possible, if hacky, to mock out even commands referred to by
            full path. Note that this will only work for things called from
            BASH, not for things called indirectly like "env /bin/foo". And
-           it won't work on DASH or with BASH in compatibility mode.
+           it won't work on DASH or with BASH in compatibility mode as these don't
+           read BASH_ENV.
         """
         bm = BashMocker(shell=self.shell)
         self.addCleanup(bm.cleanup)
@@ -149,6 +150,22 @@ class T(unittest.TestCase):
         res4 = bm.runscript('env /bin/false 123')
         self.assertEqual(res4, 1)
         self.assertEqual(bm.last_stdout, '')
+
+    def test_mock_abs_2(self):
+        """I was worried about a case where calling a function with no
+           args leaves the script args in "$@" but this doesn't seem to
+           happen. Good.
+        """
+        bm = BashMocker(shell=self.shell)
+        self.addCleanup(bm.cleanup)
+
+        bm.add_mock('bibble',  side_effect="/no/such/thing")
+        bm.add_mock("/no/such/thing", side_effect='echo "$@"')
+
+        res = bm.runscript('bibble abc 123')
+        self.assertEqual(bm.last_calls['bibble'], [ ['abc', '123'] ])
+        self.assertEqual(bm.last_calls['/no/such/thing'], [ [] ])
+        self.assertEqual(bm.last_stdout, '\n')
 
     def test_fail_mock(self):
         """I was seeing weird behaviour on Ubuntu. Actually I don't think
@@ -188,6 +205,10 @@ class T_sh(T):
     def test_mock_abs_path(self):
         super().test_mock_abs_path()
 
+    @unittest.expectedFailure
+    def test_mock_abs_2(self):
+        super().test_mock_abs_2()
+
 @unittest.skipUnless(os.path.exists("/bin/dash") , "no /bin/dash")
 class T_dash(T):
     """Test with explicit calls to DASH
@@ -198,6 +219,10 @@ class T_dash(T):
     @unittest.expectedFailure
     def test_mock_abs_path(self):
         super().test_mock_abs_path()
+
+    @unittest.expectedFailure
+    def test_mock_abs_2(self):
+        super().test_mock_abs_2()
 
 if __name__ == '__main__':
     unittest.main()

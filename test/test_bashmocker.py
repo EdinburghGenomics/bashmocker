@@ -193,8 +193,8 @@ class T(unittest.TestCase):
             self.assertEqual(bm.last_stdout, '1\n')
 
 # On Debian-type systems SH will normally be DASH. On systems where SH is BASH then
-# BASH will behave differently depending how it's called. So account for all possibilities.
-@unittest.skipUnless(os.path.exists("/bin/bash") , "no /bin/bash")
+# BASH will behave differently depending how it's called. In either case the mock-by-function
+# hack shouldn't work.
 class T_sh(T):
     """Test with explicit calls to /bin/sh
     """

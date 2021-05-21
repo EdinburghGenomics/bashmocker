@@ -1,6 +1,6 @@
 # bashmocker
 
-A Python helper for unit testing shell scripts. It's intended for use with BASH but
+A Python helper for unit testing shell scripts. It's intended for use with Bash but
 in fact any program that runs other programs and respects $PATH is testable this way.
 I made it originally for a mostly-Python project which had some embedded shell scripts,
 and I wanted to be able to test everything in one test framework.
@@ -59,7 +59,8 @@ result=$( data_cleanup server1.example.com )
 ```
 
 To provide the output you can add a side effect. This needs to be added with an explicit
-call to `add_mock()`, as you can't specify side effects in the constructor.
+call to `add_mock()`, as you can't specify side effects in the constructor. Note that the
+`side_effect` is a line to be run by Bash not a Python callback.
 
 ```python
 with BashMocker('mail_report') as bm:
@@ -84,28 +85,28 @@ that up yourself.
 
 ## What if my script invokes programs /by/explicit/path?
 
-`BashMocker` tries to patch these by defining functions, which are then fed to BASH via the
+`BashMocker` tries to patch these by defining functions, which are then fed to Bash via the
 BASH_ENV setting. This is very hacky but can work sometimes. If you're only using this module
 for writing regression tests then often a hacky solution is fine.
 
 ## What cannot be mocked out?
 
-Shell builtins, because BASH does not look for these in the path. I've not found a good reason
+Shell builtins, because Bash does not look for these in the PATH. I've not found a good reason
 to mock them out in any case.
 They could be done with the hack described above I guess - at present you'll have to call the
 internal `_add_mockfunc()` directly to make that work.
 
-## Does it only work with BASH?
+## Does it only work with Bash?
 
-The main mocking mechanism simply pokes dummy programs into the PATH, so CSH scripts
-or Makefiles or compiled applications or even Python scripts (please don't!) can be tested this
-way.
+The main mocking mechanism simply pokes dummy programs into a directory added to the PATH, so
+CSH scripts or Makefiles or compiled applications or even Python scripts (please don't!) can
+be tested this way.
 
-Internally the module creates these dummy programs as little BASH scripts, but you can also force
+Internally the module creates these dummy programs as little Bash Scripts, but you can also force
 a different interpreter to be set using eg. `BashMocker(shell="/bin/dash")`. The mechanism will
-work with DASH or with compatibility-mode BASH, but seriously who has Python3 and not BASH on
+work with Dash or with compatibility-mode Bash, but seriously who has Python3 and not Bash on
 their system??
 
 The hack that allows mocking of programs with '/' in the name, ie. programs that are invoked
-directly without searching the PATH, only works for BASH. POSIX shell doesn't let you make
-functions with '/' in the name.
+directly without searching the PATH, only works for Bash. POSIX shell doesn't let you make
+functions with '/' in the name. I thought I could achieve it with aliases, but I hit a dead end.

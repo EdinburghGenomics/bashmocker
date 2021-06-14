@@ -17,7 +17,7 @@ it's not tied to any particular testing framework.
 
 ## A quick example
 
-Say you have a shell script named cleanup.sh:
+Say you have a shell script named *cleanup.sh*:
 
 ```sh
 #!/bin/bash
@@ -31,8 +31,10 @@ To test the behaviour of the script without actually cleaning any databases or s
 Steve, we can run the script with these commands mocked out:
 
 ```python
+from bashmocker import BashMocker
+
 with BashMocker('data_cleanup', 'mail_report') as bm:
-    bm.runscript('cleanup.sh')
+    bm.runscript('./cleanup.sh')
 
     # Check that cleanup.sh called 'data_cleanup' twice.
     assert len(bm.last_calls['data_cleanup']) == 2

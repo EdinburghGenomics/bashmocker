@@ -86,7 +86,7 @@ class T(unittest.TestCase):
             self.assertEqual(bm.last_calls, dict(foo=args))
 
     def test_side_effect(self):
-        """New feature - we can add a side_effect to our mock.
+        """We can add a side_effect to our mock.
         """
         bm = BashMocker(shell=self.shell)
         self.addCleanup(bm.cleanup)
@@ -192,6 +192,31 @@ class T(unittest.TestCase):
             self.assertEqual(res, 0)
             self.assertEqual(bm.last_stdout, '1\n')
 
+    def test_unlogged(self):
+        """We can add a mock that is never logged.
+        """
+        with BashMocker('foo', shell=self.shell) as bm:
+            bm.add_mock('unlogged', log=False)
+
+            res1 = bm.runscript('foo 1234 ; unlogged 5678')
+            self.assertEqual(res1, 0)
+            self.assertEqual(bm.last_stdout, '')
+            self.assertEqual(bm.last_stderr, '')
+            self.assertEqual(bm.empty_calls(), dict(foo=[]))
+            self.assertEqual(bm.last_calls, dict(foo=[['1234']]))
+
+    def test_unlogged_func(self):
+        """Unlogged functions should be OK too
+        """
+        with BashMocker('foo', shell=self.shell) as bm:
+            bm.add_mock('unlogged', log=False)
+            bm.add_mock('bar/bar', log=True)
+            bm.add_mock('unlogged/unlogged', log=False)
+
+            res2 = bm.runscript('bar/bar 1234 ; unlogged/unlogged 5678')
+            self.assertEqual(bm.empty_calls(), {'foo':[], 'bar/bar':[]})
+            self.assertEqual(bm.last_calls, {'foo':[], 'bar/bar':[['1234']]})
+
 # On Debian-type systems SH will normally be DASH. On systems where SH is BASH then
 # BASH will behave differently depending how it's called. In either case the mock-by-function
 # hack shouldn't work.
@@ -209,6 +234,10 @@ class T_sh(T):
     def test_mock_abs_2(self):
         super().test_mock_abs_2()
 
+    @unittest.expectedFailure
+    def test_unlogged_func(self):
+        super().test_unlogged_func()
+
 @unittest.skipUnless(os.path.exists("/bin/dash") , "no /bin/dash")
 class T_dash(T):
     """Test with explicit calls to DASH
@@ -223,6 +252,10 @@ class T_dash(T):
     @unittest.expectedFailure
     def test_mock_abs_2(self):
         super().test_mock_abs_2()
+
+    @unittest.expectedFailure
+    def test_unlogged_func(self):
+        super().test_unlogged_func()
 
 if __name__ == '__main__':
     unittest.main()

@@ -40,8 +40,11 @@ class BashMocker:
 
         self._make_mockscript("_MOCK", 0)
         self._make_mockscript("_MOCKF", 1)
+        self._make_mockscript("_MOCK_NOLOG", 0, log=False)
+        self._make_mockscript("_MOCKF_NOLOG", 1, log=False)
 
         self.mocks = set()
+        self.mocks_nolog = set()
         for m in mocks:
             self.add_mock(m)
 
@@ -49,7 +52,7 @@ class BashMocker:
         self.last_stderr = None
         self.last_stdout = None
 
-    def _make_mockscript(self, mockname, retcode, side_effect="#NOP"):
+    def _make_mockscript(self, mockname, retcode, log=True, side_effect="#NOP"):
         """Internal function for making mock scripts.
         """
 
@@ -59,13 +62,21 @@ class BashMocker:
         # But using zeros seems better.
         # Also I want this to work in both BASH and DASH which is tricky.
         shell = self._shell
-        mockscript = r'''
-            #!{shell}
-            _fs=%s\\0%d\\0 ; for x in "$@" ; do _fs="$_fs"%s\\0 ; done ; _fs="$_fs"\\n
-            printf "$_fs" "$(basename "$0")" "$#" "$@" >> "$(dirname "$0")"/_MOCKCALLS
-            {side_effect}
-            exit {retcode}
-        '''.format(**locals())
+        if log:
+            mockscript = r'''
+             #!{shell}
+             _fs=%s\\0%d\\0 ; for x in "$@" ; do _fs="$_fs"%s\\0 ; done ; _fs="$_fs"\\n
+             printf "$_fs" "$(basename "$0")" "$#" "$@" >> "$(dirname "$0")"/_MOCKCALLS
+             {side_effect}
+             exit {retcode}
+            '''
+        else:
+            mockscript = r'''
+             #!{shell}
+             {side_effect}
+             exit {retcode}
+            '''
+        mockscript = mockscript.format(**locals())
 
         with open(os.path.join(self.mock_bin_dir, mockname), 'w') as fh:
             print(mockscript.strip(), file=fh)
@@ -74,7 +85,7 @@ class BashMocker:
             mode = os.stat(fh.fileno()).st_mode
             os.chmod(fh.fileno(), mode | (mode & 0o444) >> 2)
 
-    def _add_mockfunc(self, funcname, retcode, side_effect="#NOP"):
+    def _add_mockfunc(self, funcname, retcode, log=True, side_effect="#NOP"):
         """Internal function for writing mock functions.
            Note these will only apply to scripts that explicitly use #!/bin/bash
            as the interpreter, not #!/bin/sh or #!/bin/dash or anything
@@ -85,30 +96,43 @@ class BashMocker:
         if not self._shell.endswith('/bash'):
             raise RuntimeError("Only BASH allows setting a preamble for scripts")
 
-        mockfunc = r'''
-            {funcname}(){{
-            {side_effect}
-            local _fs
-            _fs=%s\\0%d\\0 ; for x in "$@" ; do _fs="$_fs"%s\\0 ; done ; _fs="$_fs"\\n
-            printf "$_fs" '{funcname}' "$#" "$@" >> "$(dirname "$BASH_SOURCE")"/_MOCKCALLS
-            return {retcode} ; }}
-        '''.format(**locals())
+        if log:
+            mockfunc = r'''
+             {funcname}(){{
+             local _fs
+             _fs=%s\\0%d\\0 ; for x in "$@" ; do _fs="$_fs"%s\\0 ; done ; _fs="$_fs"\\n
+             printf "$_fs" '{funcname}' "$#" "$@" >> "$(dirname "$BASH_SOURCE")"/_MOCKCALLS
+             {side_effect}
+             return {retcode} ; }}
+            '''
+        else:
+            mockfunc = r'''
+             {funcname}(){{
+             {side_effect}
+             return {retcode} ; }}
+            '''
+        mockfunc = mockfunc.format(**locals())
 
         with open(os.path.join(self.mock_bin_dir, '_BASH_ENV'), 'a') as fh:
             print(mockfunc.strip(), file=fh)
 
         self._sh_env_val = os.path.join(self.mock_bin_dir, "_BASH_ENV")
 
-    def add_mock(self, mock, fail=False, side_effect=None):
-        """Symlink the named script so that it will get called in
-           place of the real version.
-           Except if mock contains a / character - then we need to use
+    def add_mock(self, mock, fail=False, log=True, side_effect=None):
+        """Make a symlink named <mock> so the mock script will get called in
+           place of the given command.
+           Except if mock contains a / character - then bashmocker will try to use
            functions instead.
+
+           If log is False then calls to this command will not be logged.
+
+           If a side_effect is specified this shell code will be run as part of the
+           script.
         """
         if '/' in mock:
             # We can still mock these by defining BASH functions.
             # TODO - should we do this for builtins too?
-            self._add_mockfunc(mock, 1 if fail else 0, side_effect)
+            self._add_mockfunc(mock, 1 if fail else 0, log=log, side_effect=side_effect)
 
         else:
 
@@ -117,9 +141,12 @@ class BashMocker:
             if side_effect:
                 # We need a special script then
                 target = "_MOCK_" + mock
-                self._make_mockscript(target, 1 if fail else 0, side_effect)
+                self._make_mockscript(target, 1 if fail else 0, log=log, side_effect=side_effect)
             else:
-                target = "_MOCKF" if fail else "_MOCK"
+                if log:
+                    target = "_MOCKF" if fail else "_MOCK"
+                else:
+                    target = "_MOCKF_NOLOG" if fail else "_MOCK_NOLOG"
 
             # If the link already exists, remove it
             try:
@@ -129,7 +156,10 @@ class BashMocker:
 
             os.symlink(target, symlink)
 
-        self.mocks.add(mock)
+        if log:
+            self.mocks.add(mock)
+        else:
+            self.mocks_nolog.add(mock)
 
     def cleanup(self):
         """Clean up
@@ -141,9 +171,13 @@ class BashMocker:
         """Runs the specified command, which may contain shell syntax if
            it is a string or else may be a list of literal [cmd, arg1, arg2, ...]
            and captures the output and the commands that were invoked.
+
            By default, the mock scripts will be prepended to the PATH, but you
            can alternatively specify set_path=False in which case you take
            responsibility for adding bm.mock_bin_dir to the PATH.
+
+           If env is supplied, it must be a dict of strings. Items in env will
+           be added to the execution environment.
         """
         # Cleanup _MOCKCALLS if found
         calls_file = os.path.join(self.mock_bin_dir, "_MOCKCALLS")

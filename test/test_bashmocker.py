@@ -217,6 +217,20 @@ class T(unittest.TestCase):
             self.assertEqual(bm.empty_calls(), {'foo':[], 'bar/bar':[]})
             self.assertEqual(bm.last_calls, {'foo':[], 'bar/bar':[['1234']]})
 
+    def test_mock_calls_mock(self):
+        """A mock script should be able to call another mock script.
+        """
+        with BashMocker(shell=self.shell) as bm:
+
+            bm.add_mock('foo', side_effect="set -e ; bar $WIBBLE")
+            bm.add_mock('bar')
+
+            res = bm.runscript('set -e ; env WIBBLE=wibble_value foo')
+            self.assertEqual(res, 0)
+            self.assertEqual( bm.last_calls,
+                              { 'foo': [[]],
+                                'bar': [["wibble_value"]]} )
+
 # On Debian-type systems SH will normally be DASH. On systems where SH is BASH then
 # BASH will behave differently depending how it's called. In either case the mock-by-function
 # hack shouldn't work.

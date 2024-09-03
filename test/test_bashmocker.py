@@ -214,8 +214,10 @@ class T(unittest.TestCase):
             bm.add_mock('unlogged/unlogged', log=False)
 
             res2 = bm.runscript('bar/bar 1234 ; unlogged/unlogged 5678')
-            self.assertEqual(bm.empty_calls(), {'foo':[], 'bar/bar':[]})
-            self.assertEqual(bm.last_calls, {'foo':[], 'bar/bar':[['1234']]})
+            self.assertEqual(bm.empty_calls(), { 'foo' : [],
+                                                 'bar/bar' : [] })
+            self.assertEqual(bm.last_calls, { 'foo' : [],
+                                              'bar/bar' : [['1234']] })
 
     def test_mock_calls_mock(self):
         """A mock script should be able to call another mock script.
